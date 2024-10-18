@@ -2,13 +2,13 @@
 # -*- coding: utf8 -*-
 
 from openai import OpenAI
-import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import fitz
 import re
 import pandas as pd
 import time
 import logging
+import xlsxwriter
 
 from bot.texts import *
 
@@ -67,7 +67,7 @@ class ParamsApi:
             anchor_embedding = (self.client.embeddings.create(input=anchor_list[row], model="text-embedding-3-large").data[0].embedding)
             scores = cosine_similarity([anchor_embedding], chanks_embeddings)[0]
             candits = [
-                chanks[score_id]
+                re.sub(r'\s+', ' ', chanks[score_id]).strip()
                 for score_id, score in enumerate(scores)
                 if score >= treshold_list[row]
             ]
@@ -84,6 +84,7 @@ class ParamsApi:
         total_token_sum = 0
         first_timestemp = time.time()
         for candidat_id, candidats in enumerate(lists_of_candidats):
+            candidat_timestemp = time.time()
             api_logger.info(f"Category_name {column_name_list[candidat_id]}")
             for candidat in candidats:
                 messeges = [
@@ -107,6 +108,9 @@ class ParamsApi:
                     elif column_name_list[candidat_id] in answer_dict:
                         answer_dict[column_name_list[candidat_id]].append(candidat)
                         continue
+            api_logger.info(
+            f"На обработку {column_name_list[candidat_id]} ушло: {time.time() - candidat_timestemp} секунд"
+        )
         api_logger.info(
             f"На обработку всех категорий ушло: {time.time() - first_timestemp} секунд"
         )
@@ -123,8 +127,9 @@ class ParamsApi:
                 column_text = "--------"
             new_doc[column_name] = [column_text]
         df = pd.DataFrame.from_dict(new_doc)
+        df['file_name'] = path[6:]
         path = f"{path[:-4]}_catigoriens.xlsx"
-        df.to_excel(path, index=False)
+        df.to_excel(path, index=False, engine='xlsxwriter')
         api_logger.info("Ответ запакован в xlsx")
         return path
 
